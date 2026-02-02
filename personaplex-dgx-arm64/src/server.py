@@ -9,6 +9,7 @@ import logging
 import yaml
 from pathlib import Path
 from typing import Optional, Dict, Any
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -25,13 +26,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-# Initialize FastAPI app
-app = FastAPI(
-    title="NVIDIA PersonaPlex API",
-    description="Speech-to-Speech Conversational AI API for ARM64",
-    version="1.0.0"
-)
 
 # Global model handler
 model_handler: Optional[PersonaPlexModelHandler] = None
@@ -54,6 +48,9 @@ class Response(BaseModel):
 def load_config() -> Dict[str, Any]:
     """Load configuration"""
     config_path = os.getenv('CONFIG_PATH', 'config/config.yaml')
+    # Ensure we have the full path to the config file, not just the directory
+    if os.path.isdir(config_path):
+        config_path = os.path.join(config_path, 'config.yaml')
     try:
         with open(config_path, 'r') as f:
             return yaml.safe_load(f)
@@ -62,29 +59,40 @@ def load_config() -> Dict[str, Any]:
         return {}
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize model on startup"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown"""
+    # Startup
     global model_handler
     
     try:
         logger.info("Initializing PersonaPlex model...")
         config_path = os.getenv('CONFIG_PATH', 'config/config.yaml')
+        # Ensure we have the full path to the config file, not just the directory
+        if os.path.isdir(config_path):
+            config_path = os.path.join(config_path, 'config.yaml')
         model_handler = PersonaPlexModelHandler(config_path=config_path)
         model_handler.load_model()
         logger.info("Model initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize model: {e}")
         raise
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
-    global model_handler
+    
+    yield
+    
+    # Shutdown
     if model_handler:
         logger.info("Shutting down model handler...")
         model_handler = None
+
+
+# Initialize FastAPI app with lifespan
+app = FastAPI(
+    title="NVIDIA PersonaPlex API",
+    description="Speech-to-Speech Conversational AI API for ARM64",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 
 @app.get("/")

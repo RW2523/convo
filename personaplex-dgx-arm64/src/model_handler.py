@@ -19,6 +19,9 @@ class PersonaPlexModelHandler:
     
     def __init__(self, config_path: str = "config/config.yaml"):
         """Initialize model handler with configuration"""
+        # Ensure we have the full path to the config file, not just the directory
+        if os.path.isdir(config_path):
+            config_path = os.path.join(config_path, 'config.yaml')
         self.config = self._load_config(config_path)
         self.model = None
         self.tokenizer = None
