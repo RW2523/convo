@@ -290,6 +290,28 @@ docker build -f Dockerfile.arm64 -t personaplex-arm64:latest .
 
 See `DISTUTILS_FIX.md` for details.
 
+### Issue: Tokenizer Loading Fails (SentencePiece Missing)
+
+**Problem**: `You need to have sentencepiece or tiktoken installed to convert a slow tokenizer to a fast one`
+
+**Solution**: Fixed! Dockerfile now installs sentencepiece and tiktoken, and code has runtime fallback.
+
+**⚠️ CRITICAL: You MUST rebuild the image for this fix to work:**
+
+```bash
+# Rebuild with NO CACHE
+docker compose down
+docker build --no-cache -f Dockerfile.ngc -t personaplex-arm64:latest .
+docker compose up -d
+```
+
+The code now:
+- Installs sentencepiece/tiktoken in Dockerfile with verification
+- Checks and installs at runtime if missing
+- Uses multiple tokenizer loading strategies with fallbacks
+
+See `TOKENIZER_FIX_FINAL.md` and `CRITICAL_REBUILD.md` for details.
+
 ### ARM64 Compatibility Issues
 
 If you encounter architecture-specific issues:

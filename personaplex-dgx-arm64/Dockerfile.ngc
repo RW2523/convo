@@ -17,9 +17,13 @@ COPY requirements.txt .
 
 # Install Python dependencies (excluding PyTorch)
 # Ensure sentencepiece and tiktoken are installed for tokenizer support
+# Install them separately first to ensure they're available
 RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip3 install --no-cache-dir sentencepiece tiktoken && \
-    pip3 install --no-cache-dir -r requirements.txt
+    pip3 install --no-cache-dir sentencepiece>=0.1.99 tiktoken>=0.5.0 && \
+    python3 -c "import sentencepiece; print('sentencepiece version:', sentencepiece.__version__)" && \
+    python3 -c "import tiktoken; print('tiktoken installed')" && \
+    pip3 install --no-cache-dir -r requirements.txt && \
+    python3 -c "import sentencepiece; import tiktoken; print('Tokenizer dependencies verified')"
 
 # Copy application code
 COPY src/ ./src/

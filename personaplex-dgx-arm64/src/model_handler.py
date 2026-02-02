@@ -6,6 +6,8 @@ Handles model loading, inference, and management
 import os
 import torch
 import yaml
+import subprocess
+import sys
 from typing import Optional, Dict, Any
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor
 from pathlib import Path
@@ -73,22 +75,75 @@ class PersonaPlexModelHandler:
             
             # Load tokenizer and processor
             logger.info("Loading tokenizer and processor...")
-            # Use use_fast=False if tokenizer files are not found (fallback to slow tokenizer)
+            
+            # Ensure sentencepiece and tiktoken are installed
             try:
+                import sentencepiece
+                logger.info("sentencepiece is available")
+            except ImportError:
+                logger.warning("sentencepiece not found, installing...")
+                import subprocess
+                import sys
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", "sentencepiece", "tiktoken"])
+                logger.info("sentencepiece and tiktoken installed")
+            
+            # Try loading tokenizer with multiple fallback strategies
+            tokenizer_loaded = False
+            last_error = None
+            
+            # Strategy 1: Try with use_fast=False (slow tokenizer)
+            try:
+                logger.info("Attempting to load tokenizer with use_fast=False...")
                 self.tokenizer = AutoTokenizer.from_pretrained(
                     model_name,
                     cache_dir=self.config.get('huggingface', {}).get('cache_dir'),
                     trust_remote_code=True,
-                    use_fast=False  # Use slow tokenizer if fast tokenizer files not available
+                    use_fast=False,
+                    local_files_only=False
                 )
-            except Exception as e:
-                logger.warning(f"Failed to load tokenizer with use_fast=False, trying with use_fast=True: {e}")
-                self.tokenizer = AutoTokenizer.from_pretrained(
-                    model_name,
-                    cache_dir=self.config.get('huggingface', {}).get('cache_dir'),
-                    trust_remote_code=True,
-                    use_fast=True
-                )
+                tokenizer_loaded = True
+                logger.info("Tokenizer loaded successfully with use_fast=False")
+            except Exception as e1:
+                last_error = e1
+                logger.warning(f"Strategy 1 failed: {e1}")
+            
+            # Strategy 2: Try without use_fast parameter (let transformers decide)
+            if not tokenizer_loaded:
+                try:
+                    logger.info("Attempting to load tokenizer without use_fast parameter...")
+                    self.tokenizer = AutoTokenizer.from_pretrained(
+                        model_name,
+                        cache_dir=self.config.get('huggingface', {}).get('cache_dir'),
+                        trust_remote_code=True,
+                        local_files_only=False
+                    )
+                    tokenizer_loaded = True
+                    logger.info("Tokenizer loaded successfully without use_fast parameter")
+                except Exception as e2:
+                    last_error = e2
+                    logger.warning(f"Strategy 2 failed: {e2}")
+            
+            # Strategy 3: Try with use_fast=True (fast tokenizer)
+            if not tokenizer_loaded:
+                try:
+                    logger.info("Attempting to load tokenizer with use_fast=True...")
+                    self.tokenizer = AutoTokenizer.from_pretrained(
+                        model_name,
+                        cache_dir=self.config.get('huggingface', {}).get('cache_dir'),
+                        trust_remote_code=True,
+                        use_fast=True,
+                        local_files_only=False
+                    )
+                    tokenizer_loaded = True
+                    logger.info("Tokenizer loaded successfully with use_fast=True")
+                except Exception as e3:
+                    last_error = e3
+                    logger.warning(f"Strategy 3 failed: {e3}")
+            
+            if not tokenizer_loaded:
+                error_msg = f"All tokenizer loading strategies failed. Last error: {last_error}"
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
             
             try:
                 self.processor = AutoProcessor.from_pretrained(
