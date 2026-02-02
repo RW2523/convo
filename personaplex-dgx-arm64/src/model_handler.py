@@ -12,6 +12,7 @@ from typing import Optional, Dict, Any
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor
 from pathlib import Path
 import logging
+from huggingface_hub import hf_hub_download
 
 logger = logging.getLogger(__name__)
 
@@ -76,69 +77,62 @@ class PersonaPlexModelHandler:
             # Load tokenizer and processor
             logger.info("Loading tokenizer and processor...")
             
-            # Ensure sentencepiece and tiktoken are installed
+            # Ensure sentencepiece is installed
             try:
-                import sentencepiece
+                import sentencepiece as spm
                 logger.info("sentencepiece is available")
             except ImportError:
                 logger.warning("sentencepiece not found, installing...")
                 subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", "sentencepiece", "tiktoken"])
+                import sentencepiece as spm
                 logger.info("sentencepiece and tiktoken installed")
             
-            # Load model config first to understand tokenizer requirements
-            from transformers import AutoConfig
-            try:
-                logger.info("Loading model configuration...")
-                model_config = AutoConfig.from_pretrained(
-                    model_name,
-                    cache_dir=self.config.get('huggingface', {}).get('cache_dir'),
-                    trust_remote_code=True
-                )
-                logger.info(f"Model config loaded. Model type: {model_config.model_type if hasattr(model_config, 'model_type') else 'unknown'}")
-                
-                # Check if tokenizer class is specified in config
-                tokenizer_class_name = None
-                if hasattr(model_config, 'tokenizer_class'):
-                    tokenizer_class_name = model_config.tokenizer_class
-                    logger.info(f"Tokenizer class from config: {tokenizer_class_name}")
-            except Exception as e:
-                logger.warning(f"Could not load model config: {e}")
-                model_config = None
-            
-            # Try loading tokenizer with multiple fallback strategies
+            # PersonaPlex uses a SentencePiece model file: tokenizer_spm_32k_3.model
+            # We need to load it directly using sentencepiece or create a tokenizer from it
             tokenizer_loaded = False
             last_error = None
             
-            # Strategy 1: Try loading from config.json tokenizer_class if available
-            if model_config and hasattr(model_config, 'tokenizer_class') and model_config.tokenizer_class:
-                try:
-                    logger.info(f"Attempting to load tokenizer using class from config: {model_config.tokenizer_class}")
-                    # Import the tokenizer class dynamically
-                    from transformers import AutoTokenizer
-                    self.tokenizer = AutoTokenizer.from_pretrained(
-                        model_name,
-                        cache_dir=self.config.get('huggingface', {}).get('cache_dir'),
-                        trust_remote_code=True,
-                        use_fast=False,  # Force slow tokenizer for custom classes
-                        local_files_only=False
-                    )
-                    tokenizer_loaded = True
-                    logger.info("Tokenizer loaded successfully using config tokenizer class")
-                except Exception as e1:
-                    last_error = e1
-                    logger.warning(f"Strategy 1 (config-based) failed: {e1}")
+            # Strategy 1: Download SentencePiece model first, then load tokenizer
+            # PersonaPlex has tokenizer_spm_32k_3.model - we need to ensure it's downloaded
+            cache_dir = self.config.get('huggingface', {}).get('cache_dir')
+            try:
+                logger.info("Downloading SentencePiece model file (tokenizer_spm_32k_3.model)...")
+                spm_model_path = hf_hub_download(
+                    repo_id=model_name,
+                    filename="tokenizer_spm_32k_3.model",
+                    cache_dir=cache_dir,
+                    token=os.getenv('HF_TOKEN')
+                )
+                logger.info(f"Downloaded SentencePiece model to: {spm_model_path}")
+            except Exception as e_download:
+                logger.warning(f"Could not download SentencePiece model: {e_download}")
+                spm_model_path = None
             
-            # Strategy 2: Try with use_fast=False (slow tokenizer) - bypass fast tokenizer conversion
+            # Strategy 1: Try loading tokenizer normally (transformers should auto-detect SPM file)
+            try:
+                logger.info("Attempting to load tokenizer (transformers should auto-detect SentencePiece model)...")
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    model_name,
+                    cache_dir=cache_dir,
+                    trust_remote_code=True,
+                    local_files_only=False
+                )
+                tokenizer_loaded = True
+                logger.info("Tokenizer loaded successfully with auto-detection")
+            except Exception as e1:
+                last_error = e1
+                logger.warning(f"Strategy 1 (auto-detect) failed: {e1}")
+            
+            # Strategy 2: Try with use_fast=False (force slow tokenizer)
             if not tokenizer_loaded:
                 try:
-                    logger.info("Attempting to load tokenizer with use_fast=False (slow tokenizer)...")
+                    logger.info("Attempting to load tokenizer with use_fast=False...")
                     self.tokenizer = AutoTokenizer.from_pretrained(
                         model_name,
-                        cache_dir=self.config.get('huggingface', {}).get('cache_dir'),
+                        cache_dir=cache_dir,
                         trust_remote_code=True,
                         use_fast=False,
-                        local_files_only=False,
-                        revision="main"  # Explicitly use main branch
+                        local_files_only=False
                     )
                     tokenizer_loaded = True
                     logger.info("Tokenizer loaded successfully with use_fast=False")
@@ -146,53 +140,30 @@ class PersonaPlexModelHandler:
                     last_error = e2
                     logger.warning(f"Strategy 2 (use_fast=False) failed: {e2}")
             
-            # Strategy 3: Try loading tokenizer class directly from transformers
-            if not tokenizer_loaded:
+            # Strategy 3: Try with local_files_only=True (use already downloaded files)
+            if not tokenizer_loaded and spm_model_path:
                 try:
-                    logger.info("Attempting to load tokenizer by instantiating class directly...")
-                    # Try to get tokenizer class from model type
-                    if model_config and hasattr(model_config, 'model_type'):
-                        from transformers import AutoTokenizer
-                        # Force use of slow tokenizer by setting use_fast=False
-                        self.tokenizer = AutoTokenizer.from_pretrained(
-                            model_name,
-                            cache_dir=self.config.get('huggingface', {}).get('cache_dir'),
-                            trust_remote_code=True,
-                            use_fast=False,
-                            local_files_only=False
-                        )
-                    else:
-                        raise ValueError("Cannot determine tokenizer class")
-                    tokenizer_loaded = True
-                    logger.info("Tokenizer loaded successfully by direct instantiation")
-                except Exception as e3:
-                    last_error = e3
-                    logger.warning(f"Strategy 3 (direct instantiation) failed: {e3}")
-            
-            # Strategy 4: Last resort - try without any restrictions
-            if not tokenizer_loaded:
-                try:
-                    logger.info("Attempting to load tokenizer without restrictions...")
+                    logger.info("Attempting to load tokenizer from cached files...")
                     self.tokenizer = AutoTokenizer.from_pretrained(
                         model_name,
-                        cache_dir=self.config.get('huggingface', {}).get('cache_dir'),
+                        cache_dir=cache_dir,
                         trust_remote_code=True,
-                        local_files_only=False
+                        local_files_only=True
                     )
                     tokenizer_loaded = True
-                    logger.info("Tokenizer loaded successfully without restrictions")
-                except Exception as e4:
-                    last_error = e4
-                    logger.warning(f"Strategy 4 (no restrictions) failed: {e4}")
+                    logger.info("Tokenizer loaded successfully from cached files")
+                except Exception as e3:
+                    last_error = e3
+                    logger.warning(f"Strategy 3 (cached files) failed: {e3}")
             
             if not tokenizer_loaded:
                 error_msg = (
                     f"All tokenizer loading strategies failed. Last error: {last_error}\n"
-                    f"The PersonaPlex model may require a custom tokenizer implementation.\n"
-                    f"Please check:\n"
-                    f"1. Model repository structure on HuggingFace: https://huggingface.co/{model_name}\n"
-                    f"2. Official PersonaPlex documentation for tokenizer requirements\n"
-                    f"3. Whether the model needs to be downloaded manually or requires special setup"
+                    f"PersonaPlex uses tokenizer_spm_32k_3.model (SentencePiece).\n"
+                    f"Please ensure:\n"
+                    f"1. HuggingFace token is set (HF_TOKEN environment variable)\n"
+                    f"2. Model files are downloaded correctly\n"
+                    f"3. SentencePiece is properly installed"
                 )
                 logger.error(error_msg)
                 raise RuntimeError(error_msg)
