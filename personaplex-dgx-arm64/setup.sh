@@ -83,20 +83,42 @@ check_docker() {
     fi
 }
 
-# Install Python dependencies
+# Install Python dependencies (optional - for local development)
 install_python_deps() {
-    print_status "Installing Python dependencies..."
+    print_status "Setting up Python environment..."
     
-    # Upgrade pip
-    python3 -m pip install --upgrade pip setuptools wheel
-    
-    # Install requirements
-    if [ -f "requirements.txt" ]; then
-        python3 -m pip install -r requirements.txt
-        print_status "Python dependencies installed"
+    # Since we're using Docker, Python packages will be installed in the container
+    # However, for local development, we can create a virtual environment
+    if [ "$INSTALL_LOCAL_DEPS" = "true" ]; then
+        print_status "Creating virtual environment for local development..."
+        
+        # Check if venv exists
+        if [ ! -d "venv" ]; then
+            python3.12 -m venv venv || python3 -m venv venv
+            print_status "Virtual environment created"
+        else
+            print_status "Virtual environment already exists"
+        fi
+        
+        # Activate virtual environment
+        source venv/bin/activate
+        
+        # Upgrade pip
+        pip install --upgrade pip setuptools wheel
+        
+        # Install requirements
+        if [ -f "requirements.txt" ]; then
+            pip install -r requirements.txt
+            print_status "Python dependencies installed in virtual environment"
+        else
+            print_error "requirements.txt not found"
+            exit 1
+        fi
+        
+        print_warning "Virtual environment activated. Use 'source venv/bin/activate' to activate it."
     else
-        print_error "requirements.txt not found"
-        exit 1
+        print_status "Skipping local Python package installation (using Docker)"
+        print_status "Python dependencies will be installed in Docker container"
     fi
 }
 
@@ -108,8 +130,10 @@ setup_huggingface() {
         print_status "HuggingFace CLI found"
         print_warning "Run 'huggingface-cli login' to authenticate"
     else
-        print_status "Installing HuggingFace CLI..."
-        pip3 install huggingface_hub[cli]
+        print_status "HuggingFace CLI not found"
+        print_warning "HuggingFace CLI will be available in Docker container"
+        print_warning "Or install locally with: pipx install huggingface_hub[cli]"
+        print_warning "Or use virtual environment: python3 -m venv venv && source venv/bin/activate && pip install huggingface_hub[cli]"
     fi
 }
 
@@ -131,12 +155,25 @@ download_model() {
 main() {
     print_status "Starting setup process..."
     
+    # Check if user wants to install local dependencies
+    INSTALL_LOCAL_DEPS="${INSTALL_LOCAL_DEPS:-false}"
+    
     check_architecture
     check_cuda
     check_python
     check_docker
     
     create_directories
+    
+    # Ask user if they want to install local Python dependencies
+    if [ "$INSTALL_LOCAL_DEPS" != "true" ]; then
+        print_status ""
+        print_status "Note: Python dependencies will be installed in Docker container"
+        print_status "If you need local Python packages for development, run:"
+        print_status "  INSTALL_LOCAL_DEPS=true ./setup.sh"
+        print_status "  OR: python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt"
+    fi
+    
     install_python_deps
     setup_huggingface
     download_model
@@ -147,17 +184,24 @@ main() {
     print_status "=========================================="
     print_status ""
     print_status "Next steps:"
-    print_status "1. Authenticate with HuggingFace:"
-    print_status "   huggingface-cli login"
+    print_status "1. Authenticate with HuggingFace (in Docker container or locally):"
+    print_status "   docker run -it --rm -v ~/.cache/huggingface:/root/.cache/huggingface personaplex-arm64:latest huggingface-cli login"
+    print_status "   OR (if installed locally): huggingface-cli login"
     print_status ""
-    print_status "2. Build Docker image:"
-    print_status "   docker build -t personaplex-arm64:latest -f Dockerfile.arm64 ."
+    print_status "2. Build Docker image (RECOMMENDED - uses NGC container):"
+    print_status "   docker build -f Dockerfile.ngc -t personaplex-arm64:latest ."
     print_status ""
-    print_status "3. Or use docker-compose:"
+    print_status "   OR build with standard Dockerfile:"
+    print_status "   docker build -f Dockerfile.arm64 -t personaplex-arm64:latest ."
+    print_status ""
+    print_status "3. Start with docker-compose:"
     print_status "   docker-compose up -d"
     print_status ""
     print_status "4. Verify setup:"
     print_status "   ./scripts/verify_setup.sh"
+    print_status ""
+    print_status "Note: All Python dependencies are installed in Docker container"
+    print_status "      No need to install packages on host system!"
     print_status ""
 }
 

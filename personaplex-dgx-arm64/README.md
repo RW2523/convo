@@ -46,27 +46,46 @@ git push origin main
 git clone <your-repo-url>
 cd personaplex-dgx-arm64
 
-# Run setup script
+# Run setup script (skips local Python packages - uses Docker instead)
 chmod +x setup.sh
 ./setup.sh
 
-# Authenticate with HuggingFace
-huggingface-cli login
-# Enter your HuggingFace token when prompted
+# Note: Setup script skips local Python package installation to avoid PEP 668 errors
+# All dependencies are installed in Docker container - no need for local packages!
 ```
 
-### 3. Build and Run
+### 3. Authenticate with HuggingFace
 
 ```bash
-# Build Docker image for ARM64
-docker build -t personaplex-arm64:latest -f Dockerfile.arm64 .
+# Option A: In Docker container (recommended)
+docker run -it --rm -v ~/.cache/huggingface:/root/.cache/huggingface \
+  personaplex-arm64:latest huggingface-cli login
 
-# Or use docker-compose
+# Option B: Locally (if you installed huggingface-cli)
+huggingface-cli login
+```
+
+### 4. Build and Run
+
+```bash
+# Build Docker image (RECOMMENDED - uses NGC container with pre-built PyTorch)
+docker build -f Dockerfile.ngc -t personaplex-arm64:latest .
+
+# OR build with standard Dockerfile
+docker build -f Dockerfile.arm64 -t personaplex-arm64:latest .
+
+# Start with docker-compose
 docker-compose up -d
 
 # Check logs
 docker-compose logs -f
 ```
+
+## ⚠️ Important: PEP 668 Fix
+
+**If you get "externally-managed-environment" error**: This is normal! The setup script has been updated to skip local Python package installation since we use Docker. All Python dependencies are installed in the Docker container, so you don't need to install them on the host system.
+
+See `QUICK_FIX.md` for details.
 
 ### 4. Access the Service
 
