@@ -73,11 +73,22 @@ class PersonaPlexModelHandler:
             
             # Load tokenizer and processor
             logger.info("Loading tokenizer and processor...")
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                model_name,
-                cache_dir=self.config.get('huggingface', {}).get('cache_dir'),
-                trust_remote_code=True
-            )
+            # Use use_fast=False if tokenizer files are not found (fallback to slow tokenizer)
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    model_name,
+                    cache_dir=self.config.get('huggingface', {}).get('cache_dir'),
+                    trust_remote_code=True,
+                    use_fast=False  # Use slow tokenizer if fast tokenizer files not available
+                )
+            except Exception as e:
+                logger.warning(f"Failed to load tokenizer with use_fast=False, trying with use_fast=True: {e}")
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    model_name,
+                    cache_dir=self.config.get('huggingface', {}).get('cache_dir'),
+                    trust_remote_code=True,
+                    use_fast=True
+                )
             
             try:
                 self.processor = AutoProcessor.from_pretrained(
