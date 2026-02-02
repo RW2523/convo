@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y \
     python3.12 \
     python3.12-dev \
     python3.12-venv \
-    python3-pip \
+    python3.12-distutils \
     git \
     wget \
     curl \
@@ -35,8 +35,11 @@ RUN apt-get update && apt-get install -y \
     libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Create symlinks for python
-RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 && \
+# Install pip for Python 3.12 and create symlinks
+RUN python3.12 -m ensurepip --upgrade || \
+    (curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12) && \
+    python3.12 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    ln -sf /usr/bin/python3.12 /usr/bin/python3 && \
     ln -sf /usr/bin/python3.12 /usr/bin/python
 
 # Set working directory
@@ -45,16 +48,12 @@ WORKDIR /app
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies with ARM64 compatibility
-# Note: For DGX Spark, PyTorch should be pre-installed or use NVIDIA NGC containers
-RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
-
 # Copy and run PyTorch installation script if needed
 COPY scripts/install_pytorch_arm64.sh /tmp/
 RUN chmod +x /tmp/install_pytorch_arm64.sh || true
 
 # Install other Python dependencies (PyTorch excluded from requirements.txt)
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN python3.12 -m pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY src/ ./src/
