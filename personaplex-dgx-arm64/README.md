@@ -75,7 +75,13 @@ docker run -it --rm \
 python3.12 -m venv venv
 source venv/bin/activate
 pip install huggingface_hub[cli]
-huggingface-cli login
+
+# Login using Python script (works even if CLI command not found)
+python scripts/hf_login.py
+
+# OR use Python API directly
+python -c "from huggingface_hub import login; login()"
+
 deactivate
 ```
 

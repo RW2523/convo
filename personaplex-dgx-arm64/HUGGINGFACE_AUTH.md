@@ -11,11 +11,22 @@ python3.12 -m venv venv
 # Activate it
 source venv/bin/activate
 
-# Install huggingface-cli
+# Install huggingface_hub
 pip install huggingface_hub[cli]
 
-# Login
-huggingface-cli login
+# Login using Python script (EASIEST - works even if CLI not found)
+python scripts/hf_login.py
+
+# OR try these alternative methods:
+# Method 1: Use Python API directly
+python -c "from huggingface_hub import login; login()"
+
+# Method 2: Try as module
+python -m huggingface_hub.commands.huggingface_cli login
+
+# Method 3: Check if CLI is in venv/bin
+which huggingface-cli
+./venv/bin/huggingface-cli login  # if found
 
 # Enter your token when prompted
 # Get token from: https://huggingface.co/settings/tokens
@@ -81,7 +92,24 @@ export HF_TOKEN=your_token_here
 
 ## Quick Start (Recommended)
 
-For the easiest setup, use **Option 3** (Docker container):
+**For Virtual Environment (Easiest if CLI not found):**
+
+```bash
+# 1. Create and activate venv
+python3.12 -m venv venv
+source venv/bin/activate
+
+# 2. Install huggingface_hub
+pip install huggingface_hub[cli]
+
+# 3. Login using Python script
+python scripts/hf_login.py
+
+# 4. Deactivate
+deactivate
+```
+
+**OR use Docker container:**
 
 ```bash
 # 1. Build Docker image
@@ -91,7 +119,7 @@ docker build -f Dockerfile.ngc -t personaplex-arm64:latest .
 docker run -it --rm \
   -v ~/.cache/huggingface:/root/.cache/huggingface \
   personaplex-arm64:latest \
-  huggingface-cli login
+  python -c "from huggingface_hub import login; login()"
 
 # 3. Start services (token will be used from cache)
 docker-compose up -d
