@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  personaplex:
+    build:
+      context: .
+      dockerfile: Dockerfile.arm64
+      platforms:
+        - linux/arm64
+      args:
+        TARGETPLATFORM: linux/arm64
+    image: personaplex-arm64:latest
+    container_name: personaplex-arm64
+    restart: unless-stopped
+    
+    # GPU access
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    
+    # Environment variables
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - MODEL_NAME=nvidia/personaplex-7b-v1
+      - PORT=8000
+      - LOG_LEVEL=INFO
+      - HF_TOKEN=${HF_TOKEN:-}
+      - MODEL_PATH=/app/models
+      - CONFIG_PATH=/app/config
+    
+    # Port mapping
+    ports:
+      - "8000:8000"
+    
+    # Volume mounts
+    volumes:
+      - ./models:/app/models
+      - ./config:/app/config
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

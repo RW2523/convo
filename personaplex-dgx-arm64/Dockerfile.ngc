@@ -1,0 +1,46 @@
+# Alternative Dockerfile using NVIDIA NGC container (Recommended for DGX Spark)
+# This uses NVIDIA's pre-built PyTorch container with ARM64 support
+# Usage: docker build -f Dockerfile.ngc -t personaplex-arm64:latest .
+
+FROM nvcr.io/nvidia/pytorch:24.01-py3
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV CUDA_ARCHITECTURES=121-real
+ENV TORCH_CUDA_ARCH_LIST="12.1"
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements (PyTorch already installed in base image)
+COPY requirements.txt .
+
+# Install Python dependencies (excluding PyTorch)
+RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip3 install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY src/ ./src/
+COPY config/ ./config/
+COPY scripts/ ./scripts/
+
+# Make scripts executable
+RUN chmod +x scripts/*.sh
+
+# Create directories for models and data
+RUN mkdir -p /app/models /app/data /app/logs
+
+# Set environment variables for model path
+ENV MODEL_PATH=/app/models
+ENV CONFIG_PATH=/app/config
+ENV LOG_PATH=/app/logs
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run the application
+CMD ["python3", "src/server.py"]

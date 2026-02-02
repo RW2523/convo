@@ -1,0 +1,23 @@
+{
+  "model_type": "personaplex",
+  "model_name": "nvidia/personaplex-7b-v1",
+  "architecture": "arm64",
+  "cuda_architectures": "121-real",
+  "features": {
+    "streaming": true,
+    "real_time": true,
+    "speech_to_speech": true,
+    "conversational": true
+  },
+  "requirements": {
+    "python": "3.12",
+    "cuda": "12.1+",
+    "pytorch": "2.1.0+",
+    "transformers": "4.35.0+"
+  },
+  "optimization": {
+    "use_tensorrt": false,
+    "use_onnx": false,
+    "quantization": "none"
+  }
+}

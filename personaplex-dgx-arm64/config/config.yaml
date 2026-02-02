@@ -1,0 +1,52 @@
+# PersonaPlex Configuration for ARM64
+
+# Model Configuration
+model:
+  name: "nvidia/personaplex-7b-v1"
+  path: "/app/models"
+  device: "cuda"
+  dtype: "float16"  # float16 or bfloat16 for better performance
+  max_length: 2048
+  temperature: 0.7
+  top_p: 0.9
+  top_k: 50
+
+# Server Configuration
+server:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 1
+  timeout: 300
+  max_request_size: 10485760  # 10MB
+
+# GPU Configuration
+gpu:
+  device_ids: [0]  # Use first GPU by default
+  memory_fraction: 0.9
+  allow_growth: true
+
+# Audio Configuration
+audio:
+  sample_rate: 16000
+  chunk_size: 4096
+  format: "wav"
+  channels: 1
+
+# Performance
+performance:
+  batch_size: 1
+  enable_streaming: true
+  use_flash_attention: true
+  compile_model: false  # Set to true for PyTorch 2.0+ compilation
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file: "/app/logs/personaplex.log"
+  max_size: 10485760  # 10MB
+  backup_count: 5
+
+# HuggingFace
+huggingface:
+  cache_dir: "/root/.cache/huggingface"
+  token: null  # Set via environment variable HF_TOKEN

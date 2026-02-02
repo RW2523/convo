@@ -1,0 +1,79 @@
+# Dockerfile for NVIDIA PersonaPlex on ARM64 (DGX Spark)
+# Note: CUDA will be provided by the host system via NVIDIA Container Runtime
+# For best compatibility, consider using Dockerfile.ngc which uses NVIDIA NGC containers
+
+FROM ubuntu:22.04
+
+# Set architecture explicitly for ARM64
+ARG TARGETPLATFORM=linux/arm64
+ARG BUILDPLATFORM
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV CUDA_ARCHITECTURES=121-real
+ENV PYTHON_VERSION=3.12
+ENV TORCH_CUDA_ARCH_LIST="12.1"
+
+# Install system dependencies
+# Note: CUDA libraries will be mounted from host via NVIDIA Container Runtime
+RUN apt-get update && apt-get install -y \
+    python3.12 \
+    python3.12-dev \
+    python3-pip \
+    git \
+    wget \
+    curl \
+    build-essential \
+    cmake \
+    libssl-dev \
+    libffi-dev \
+    software-properties-common \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create symlinks for python
+RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.12 /usr/bin/python
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install Python dependencies with ARM64 compatibility
+# Note: For DGX Spark, PyTorch should be pre-installed or use NVIDIA NGC containers
+RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
+
+# Copy and run PyTorch installation script if needed
+COPY scripts/install_pytorch_arm64.sh /tmp/
+RUN chmod +x /tmp/install_pytorch_arm64.sh || true
+
+# Install other Python dependencies (PyTorch excluded from requirements.txt)
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY src/ ./src/
+COPY config/ ./config/
+COPY scripts/ ./scripts/
+
+# Make scripts executable
+RUN chmod +x scripts/*.sh
+
+# Create directories for models and data
+RUN mkdir -p /app/models /app/data /app/logs
+
+# Set environment variables for model path
+ENV MODEL_PATH=/app/models
+ENV CONFIG_PATH=/app/config
+ENV LOG_PATH=/app/logs
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run the application
+CMD ["python3", "src/server.py"]
