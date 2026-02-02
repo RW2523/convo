@@ -26,14 +26,14 @@ build:
 	@docker build -t personaplex-arm64:latest -f Dockerfile.arm64 .
 
 run:
-	@docker-compose up -d
+	@docker compose up -d 2>/dev/null || docker-compose up -d
 	@echo "Service running at http://localhost:8000"
 
 stop:
-	@docker-compose down
+	@docker compose down 2>/dev/null || docker-compose down
 
 clean:
-	@docker-compose down -v
+	@docker compose down -v 2>/dev/null || docker-compose down -v
 	@docker rmi personaplex-arm64:latest || true
 	@echo "Cleaned up Docker resources"
 
@@ -56,7 +56,7 @@ download-model:
 	@python3 scripts/download_model.py
 
 logs:
-	@docker-compose logs -f
+	@docker compose logs -f 2>/dev/null || docker-compose logs -f
 
 status:
-	@docker-compose ps
+	@docker compose ps 2>/dev/null || docker-compose ps

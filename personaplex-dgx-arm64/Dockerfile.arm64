@@ -17,9 +17,14 @@ ENV TORCH_CUDA_ARCH_LIST="12.1"
 
 # Install system dependencies
 # Note: CUDA libraries will be mounted from host via NVIDIA Container Runtime
+# Python 3.12 needs to be installed from deadsnakes PPA on Ubuntu 22.04
 RUN apt-get update && apt-get install -y \
+    software-properties-common \
+    && add-apt-repository -y ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y \
     python3.12 \
     python3.12-dev \
+    python3.12-venv \
     python3-pip \
     git \
     wget \
@@ -28,7 +33,6 @@ RUN apt-get update && apt-get install -y \
     cmake \
     libssl-dev \
     libffi-dev \
-    software-properties-common \
     && rm -rf /var/lib/apt/lists/*
 
 # Create symlinks for python

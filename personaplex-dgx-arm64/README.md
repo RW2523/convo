@@ -100,15 +100,21 @@ See `HUGGINGFACE_AUTH.md` for detailed instructions.
 # Build Docker image (RECOMMENDED - uses NGC container with pre-built PyTorch)
 docker build -f Dockerfile.ngc -t personaplex-arm64:latest .
 
-# OR build with standard Dockerfile
+# OR build with standard Dockerfile (now fixed for Python 3.12)
 docker build -f Dockerfile.arm64 -t personaplex-arm64:latest .
 
-# Start with docker-compose
+# Start with docker compose (use 'docker compose' if plugin available, else 'docker-compose')
+docker compose up -d
+# OR
 docker-compose up -d
 
 # Check logs
+docker compose logs -f
+# OR
 docker-compose logs -f
 ```
+
+**Note**: If `docker-compose` command not found, see `INSTALL_DOCKER_COMPOSE.md` or use `docker compose` (plugin version).
 
 ## ⚠️ Important: PEP 668 Fix
 
