@@ -59,12 +59,38 @@ The setup script now:
 # 2. Build Docker image
 docker build -f Dockerfile.ngc -t personaplex-arm64:latest .
 
-# 3. Start services
+# 3. Authenticate with HuggingFace (in Docker container)
+docker run -it --rm \
+  -v ~/.cache/huggingface:/root/.cache/huggingface \
+  personaplex-arm64:latest \
+  huggingface-cli login
+
+# 4. Start services
 docker-compose up -d
 
-# 4. Check status
+# 5. Check status
 docker-compose ps
 curl http://localhost:8000/health
 ```
 
 That's it! No need to install Python packages on the host system.
+
+## HuggingFace Authentication
+
+Since `huggingface-cli` is not installed locally, authenticate in Docker:
+
+```bash
+# After building the image
+docker run -it --rm \
+  -v ~/.cache/huggingface:/root/.cache/huggingface \
+  personaplex-arm64:latest \
+  huggingface-cli login
+```
+
+Or use environment variable:
+```bash
+export HF_TOKEN=your_token_here
+docker-compose up -d
+```
+
+See `HUGGINGFACE_AUTH.md` for all authentication options.

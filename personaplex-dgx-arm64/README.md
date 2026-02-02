@@ -56,14 +56,37 @@ chmod +x setup.sh
 
 ### 3. Authenticate with HuggingFace
 
-```bash
-# Option A: In Docker container (recommended)
-docker run -it --rm -v ~/.cache/huggingface:/root/.cache/huggingface \
-  personaplex-arm64:latest huggingface-cli login
+Since `huggingface-cli` is not installed locally (to avoid PEP 668 issues), use one of these methods:
 
-# Option B: Locally (if you installed huggingface-cli)
-huggingface-cli login
+**Option A: In Docker Container (Recommended)**
+```bash
+# First build the image
+docker build -f Dockerfile.ngc -t personaplex-arm64:latest .
+
+# Then authenticate in container
+docker run -it --rm \
+  -v ~/.cache/huggingface:/root/.cache/huggingface \
+  personaplex-arm64:latest \
+  huggingface-cli login
 ```
+
+**Option B: Using Virtual Environment**
+```bash
+python3.12 -m venv venv
+source venv/bin/activate
+pip install huggingface_hub[cli]
+huggingface-cli login
+deactivate
+```
+
+**Option C: Set Environment Variable**
+```bash
+# Get token from: https://huggingface.co/settings/tokens
+export HF_TOKEN=your_token_here
+# Token will be used by Docker container
+```
+
+See `HUGGINGFACE_AUTH.md` for detailed instructions.
 
 ### 4. Build and Run
 
